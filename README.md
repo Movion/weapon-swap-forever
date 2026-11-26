@@ -24,7 +24,7 @@ Click the sword-and-dagger icon in the minimap's AddOn Compartment, run `/wsf`, 
 - **Use Equipped** next to an ability assigns the weapon in your main hand to that macro. **Use Default** returns the ability to its shared weapon.
 - **Sync Macros** creates missing macros or updates existing macros from saved assignments. The status line shows what succeeded and what still needs attention. Equip weapons with your action bar macros.
 
-To add another learned active ability, equip the weapon first, enter the ability name or spell ID, and click **Add**. For a ready macro, choose **Place on Bar** and click an action bar slot. You can also drag the macro from `/macro`. Drag the menu by its title bar. The scrollbar appears when the list exceeds the visible area.
+To add another learned active ability, equip the weapon first, enter the ability name or spell ID beside **Ability macros**, and click **Add Ability**. For a ready macro, choose **Place on Bar** and click an action bar slot. You can also drag the macro from `/macro`. Drag the menu by its title bar. The scrollbar appears when the list exceeds the visible area.
 
 ## Rogue
 

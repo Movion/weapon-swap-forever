@@ -740,7 +740,7 @@ local STATUS_COLORS = {
 openMenu = function(profile)
     if not menu then
         menu = CreateFrame("Frame", "WeaponSwapForeverMenu", UIParent, "ButtonFrameTemplate")
-        menu:SetSize(744, 535)
+        menu:SetSize(744, 566)
         menu:SetPoint("CENTER")
         menu:SetFrameStrata("DIALOG")
         menu:EnableMouse(true)
@@ -767,18 +767,24 @@ openMenu = function(profile)
         syncButton:SetPoint("TOPRIGHT", -18, -28)
 
         local syncHelp = menu:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        syncHelp:SetPoint("TOPLEFT", 16, -58)
+        syncHelp:SetPoint("TOPLEFT", 16, -76)
         syncHelp:SetWidth(706)
         syncHelp:SetJustifyH("LEFT")
 
+        local gearHelp = menu:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        gearHelp:SetPoint("TOPLEFT", 16, -93)
+        gearHelp:SetWidth(706)
+        gearHelp:SetJustifyH("LEFT")
+        gearHelp:SetText(VALUES.NEW_GEAR_EXPLANATION)
+
         local presets = menu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        presets:SetPoint("TOPLEFT", 16, -84)
+        presets:SetPoint("TOPLEFT", 16, -116)
         presets:SetText(VALUES.PRESET_HEADING)
         local presetRows = {}
         for index, role in ipairs(profile.roles) do
             local key = role.key
             local line = menu:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-            line:SetPoint("TOPLEFT", 16, -110 - (index - 1) * 25)
+            line:SetPoint("TOPLEFT", 16, -141 - (index - 1) * 25)
             line:SetWidth(518)
             line:SetJustifyH("LEFT")
             line:SetWordWrap(false)
@@ -792,23 +798,42 @@ openMenu = function(profile)
 
         local presetHeight = #profile.roles * 25
         local equipped = menu:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        equipped:SetPoint("TOPLEFT", 16, -115 - presetHeight)
+        equipped:SetPoint("TOPLEFT", 16, -147 - presetHeight)
         equipped:SetWidth(706)
         equipped:SetJustifyH("LEFT")
         equipped:SetWordWrap(false)
 
         local macrosHeading = menu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        macrosHeading:SetPoint("TOPLEFT", 16, -140 - presetHeight)
+        local macroHeaderY = -172 - presetHeight
+        macrosHeading:SetPoint("LEFT", menu, "TOPLEFT", 16, macroHeaderY - 11)
         macrosHeading:SetText(VALUES.MACRO_HEADING)
+
+        local input = CreateFrame("EditBox", nil, menu, "InputBoxTemplate")
+        input:SetSize(190, 22)
+        input:SetAutoFocus(false)
+        input:SetMaxLetters(100)
+        input:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+        input:SetScript("OnEnterPressed", function(self) addAbility(profile, self) end)
+
+        local add = createButton(menu, VALUES.ADD_ABILITY, 140, function()
+            addAbility(profile, input)
+        end)
+        add:SetPoint("TOPRIGHT", -18, macroHeaderY)
+        input:SetPoint("RIGHT", add, "LEFT", -10, 0)
+
+        local spellLabel = menu:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        spellLabel:SetPoint("RIGHT", input, "LEFT", -12, 0)
+        spellLabel:SetText(VALUES.SPELL_INPUT)
+
         local macroHelp = menu:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        macroHelp:SetPoint("TOPLEFT", 16, -158 - presetHeight)
+        macroHelp:SetPoint("TOPLEFT", 16, -201 - presetHeight)
         macroHelp:SetWidth(706)
         macroHelp:SetJustifyH("LEFT")
         macroHelp:SetText(VALUES.MENU_INSTRUCTIONS)
 
         local scroll = CreateFrame("ScrollFrame", nil, menu, "UIPanelScrollFrameTemplate")
-        scroll:SetPoint("TOPLEFT", 16, -181 - presetHeight)
-        scroll:SetPoint("BOTTOMRIGHT", -36, 64)
+        scroll:SetPoint("TOPLEFT", 16, -220 - presetHeight)
+        scroll:SetPoint("BOTTOMRIGHT", -36, 56)
         scroll.ScrollBar:Hide()
         scroll:HookScript("OnScrollRangeChanged", function(self, _, verticalRange)
             self.ScrollBar:SetShown(verticalRange > 0)
@@ -818,23 +843,10 @@ openMenu = function(profile)
         scroll:SetScrollChild(content)
 
         menu.feedback = menu:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        menu.feedback:SetPoint("BOTTOMLEFT", 16, 44)
+        menu.feedback:SetPoint("BOTTOMLEFT", 16, 36)
         menu.feedback:SetWidth(706)
         menu.feedback:SetJustifyH("LEFT")
         menu.feedback:SetWordWrap(false)
-
-        local label = menu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        label:SetPoint("BOTTOMLEFT", 16, 20)
-        label:SetText(VALUES.SPELL_INPUT)
-        local input = CreateFrame("EditBox", nil, menu, "InputBoxTemplate")
-        input:SetSize(240, 22)
-        input:SetPoint("LEFT", label, "RIGHT", 14, 0)
-        input:SetAutoFocus(false)
-        input:SetMaxLetters(100)
-        input:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-        input:SetScript("OnEnterPressed", function(self) addAbility(profile, self) end)
-        local add = createButton(menu, VALUES.ADD_ABILITY, 100, function() addAbility(profile, input) end)
-        add:SetPoint("LEFT", input, "RIGHT", 8, 0)
 
         local rows = {}
         refreshMenu = function()
@@ -843,8 +855,7 @@ openMenu = function(profile)
             end
             local db = getDatabase()
             local combat = InCombatLockdown()
-            syncHelp:SetText(combat and VALUES.COMBAT_SYNC
-                or (VALUES.SYNC_EXPLANATION .. "\n" .. VALUES.NEW_GEAR_EXPLANATION))
+            syncHelp:SetText(combat and VALUES.COMBAT_SYNC or VALUES.SYNC_EXPLANATION)
             for index, role in ipairs(profile.roles) do
                 local preset = presetRows[index]
                 local saved = displayItem(db.weapons[role.key], db.links[role.key], VALUES.NOT_SELECTED)

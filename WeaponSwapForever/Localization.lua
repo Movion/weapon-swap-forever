@@ -1,7 +1,7 @@
 local _, addon = ...
 
 local VALUES = {
-    ADD_ABILITY = "Add",
+    ADD_ABILITY = "Add Ability",
     ABILITY_ADDED = "%s created. Choose Place on Bar to pick it up.",
     ADDON_NAME = "Weapon Swap Forever",
     ALREADY_IN_MENU = "%s is already in the menu. Choose Use Equipped in that row.",
@@ -85,7 +85,7 @@ local VALUES = {
 
 local translations = {
     deDE = {
-        ADD_ABILITY = "Hinzufügen",
+        ADD_ABILITY = "Fähigkeit hinzufügen",
         ABILITY_ADDED = "%s erstellt. Klicke auf „Auf Leiste legen“, um das Makro aufzunehmen.",
         ALREADY_IN_MENU = "%s steht bereits im Menü. Klicke dort auf „Angelegte Waffe“.",
         ASSIGNMENT_OUT_OF_COMBAT = "Ändere diese Zuweisung außerhalb des Kampfes.",
