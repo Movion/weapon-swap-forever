@@ -1,7 +1,7 @@
 ## Interface: 16001
 ## Title: Weapon Swap Forever
 ## Notes: Verwaltet Waffenwechsel-Makros für Schurken und Krieger.
-## Version: 1.1.1
+## Version: 1.1.2
 ## SavedVariablesPerCharacter: WeaponSwapForeverDB
 
 WeaponSwapForever.lua

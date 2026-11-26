@@ -6,11 +6,11 @@ Dieses Addon wurde mit Unterstützung von KI entwickelt.
 
 ## Installation
 
-Entpacke `WeaponSwapForever-1.1.1.zip` in `World of Warcraft\_forever_\Interface\AddOns`. Danach muss dort `WeaponSwapForever\WeaponSwapForever.toc` liegen. Starte WoW neu und prüfe im AddOn-Menü, ob **Weapon Swap Forever** aktiv ist. Nach einem Update von 1.0.0 führe einmal außerhalb des Kampfes `/wsf sync` aus, um die vorhandenen Makros zu aktualisieren.
+Entpacke `WeaponSwapForever-1.1.2.zip` in `World of Warcraft\_forever_\Interface\AddOns`. Danach muss dort `WeaponSwapForever\WeaponSwapForever.toc` liegen. Starte WoW neu und prüfe im AddOn-Menü, ob **Weapon Swap Forever** aktiv ist. Nach einem Update von 1.0.0 führe einmal außerhalb des Kampfes `/wsf sync` aus, um die vorhandenen Makros zu aktualisieren.
 
 ## Neue Ausrüstung übernehmen
 
-Wenn du eine bisher ungespeicherte Waffe in der Haupthand anlegst, fragt ein Blizzard-Dialog, ob das Addon deine Makros dafür aktualisieren soll. Beim Schurken schlägt das Addon für einen Dolch die Dolchmakros vor und für andere Waffen die normale Hauptwaffe. Wenn du als Krieger eine neue Einhandwaffe mit angelegtem Schild ausrüstest, kannst du **Offense** oder **Defense** wählen. Bei **Defense** übernimmt das Addon den angelegten Schild mit. Einen neu angelegten Schild kannst du auch einzeln übernehmen.
+Wenn du eine bisher ungespeicherte Waffe in der Haupthand anlegst, fragt ein Blizzard-Dialog, ob das Addon deine Makros dafür aktualisieren soll. Die Abfrage erscheint auch bei geöffnetem Addon-Menü. Beim Schurken schlägt das Addon für einen Dolch die Dolchmakros vor und für andere Waffen die normale Hauptwaffe. Wenn du einen Dolch zuerst in der Nebenhand anlegst, kann das Addon ihn ebenfalls für die Dolchmakros übernehmen, sofern du ihn in der Haupthand tragen kannst. Wenn du als Krieger eine neue Einhandwaffe mit angelegtem Schild ausrüstest, kannst du **Offense** oder **Defense** wählen. Bei **Defense** übernimmt das Addon den angelegten Schild mit. Einen neu angelegten Schild kannst du auch einzeln übernehmen.
 
 Beim Wechsel zwischen gespeicherten Waffen erscheint keine Abfrage. Bei einem Wechsel im Kampf erscheint sie danach, wenn der neue Gegenstand noch angelegt ist. Mit **Abbrechen** behältst du deine bisherigen Makros. Die Chatbefehle bleiben für die manuelle Auswahl verfügbar.
 

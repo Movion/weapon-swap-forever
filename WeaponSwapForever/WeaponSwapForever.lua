@@ -172,10 +172,11 @@ local function getEquipmentType(itemID)
     return location, class, subclass
 end
 
-local function readEquipped(role)
-    local itemID = GetInventoryItemID("player", role.slot)
+local function readEquipped(role, sourceSlot)
+    local slot = sourceSlot or role.slot
+    local itemID = GetInventoryItemID("player", slot)
     if not itemID then
-        return nil, ("Für %s zuerst einen Gegenstand in Slot %d anlegen."):format(role.label, role.slot)
+        return nil, ("Für %s zuerst einen Gegenstand in Slot %d anlegen."):format(role.label, slot)
     end
 
     local location, class, subclass = getEquipmentType(itemID)
@@ -187,16 +188,18 @@ local function readEquipped(role)
         return nil, "Lege eine Waffe in der Haupthand an."
     elseif role.dagger and subclass ~= Enum.ItemWeaponSubclass.Dagger then
         return nil, "Lege einen Dolch in der Haupthand an."
+    elseif role.dagger and location == "INVTYPE_WEAPONOFFHAND" then
+        return nil, "Dieser Dolch passt nur in die Nebenhand."
     end
 
-    return { id = itemID, link = GetInventoryItemLink("player", role.slot) }
+    return { id = itemID, link = GetInventoryItemLink("player", slot) }
 end
 
-local function capture(profile, command, db)
+local function capture(profile, command, db, sourceSlot)
     local selection = {}
     for _, role in ipairs(profile.roles) do
         if role.key == command or (command == "defense" and role.key == "shield") then
-            local item, message = readEquipped(role)
+            local item, message = readEquipped(role, role.key == command and sourceSlot or nil)
             if not item then
                 say(message)
                 return
@@ -217,7 +220,23 @@ local activePrompt
 
 local function closePrompt()
     if activePrompt then
-        StaticPopup_Hide(activePrompt)
+        local dialog = activePrompt.dialog
+        activePrompt = nil
+        StaticPopup_Hide(dialog)
+    end
+end
+
+local function clearPrompt(_, proposal)
+    if activePrompt == proposal then
+        activePrompt = nil
+    end
+end
+
+local function presentPrompt(proposal, dialog, name, label)
+    closePrompt()
+    proposal.dialog = dialog
+    activePrompt = proposal
+    if not StaticPopup_Show(dialog, name, label, proposal) then
         activePrompt = nil
     end
 end
@@ -227,12 +246,12 @@ local function acceptEquipment(proposal, role)
         say("Bestätige die Auswahl nach dem Kampf.")
         return true
     end
-    if GetInventoryItemID("player", MAIN_HAND) ~= proposal.main
-        or (proposal.warrior and GetInventoryItemID("player", OFF_HAND) ~= proposal.off) then
+    if GetInventoryItemID("player", proposal.slot) ~= proposal.id
+        or (role == "defense" and GetInventoryItemID("player", OFF_HAND) ~= proposal.shield) then
         say("Deine Ausrüstung hat sich inzwischen geändert.")
         return
     end
-    capture(proposal.profile, role, getDatabase())
+    capture(proposal.profile, role, getDatabase(), proposal.slot)
 end
 
 StaticPopupDialogs[EQUIPMENT_PROMPT] = {
@@ -242,6 +261,7 @@ StaticPopupDialogs[EQUIPMENT_PROMPT] = {
     button3 = "Menü",
     timeout = 0,
     hideOnEscape = true,
+    OnHide = clearPrompt,
     OnAccept = function(_, proposal)
         return acceptEquipment(proposal, proposal.role)
     end,
@@ -258,6 +278,7 @@ StaticPopupDialogs[WARRIOR_PROMPT] = {
     button4 = "Menü",
     timeout = 0,
     hideOnEscape = true,
+    OnHide = clearPrompt,
     selectCallbackByIndex = true,
     OnAccept = function(_, proposal)
         return acceptEquipment(proposal, "offense")
@@ -270,43 +291,61 @@ StaticPopupDialogs[WARRIOR_PROMPT] = {
     end,
 }
 
-local function showEquipmentPrompt(profile, warrior, main, off, mainChanged, offChanged)
-    local db = getDatabase()
+local function isKnownWeapon(db, itemID)
     local weapons = db.weapons
-    local proposal = { profile = profile, warrior = warrior, main = main, off = off }
-    local mainKnown = main == weapons.main or main == weapons.dagger
-        or main == weapons.offense or main == weapons.defense
-    if mainChanged and main and not mainKnown then
-        for _, assigned in pairs(db.assigned) do
-            if assigned.id == main then
-                mainKnown = true
-                break
-            end
+    if itemID == weapons.main or itemID == weapons.dagger
+        or itemID == weapons.offense or itemID == weapons.defense then
+        return true
+    end
+    for _, assigned in pairs(db.assigned) do
+        if assigned.id == itemID then
+            return true
         end
     end
+    return false
+end
+
+local function showEquipmentPrompt(profile, warrior, main, off, mainChanged, offChanged)
+    local db = getDatabase()
     local location, itemClass, subclass
-    if mainChanged and main and not mainKnown then
+    if mainChanged and main and not isKnownWeapon(db, main) then
         location, itemClass, subclass = getEquipmentType(main)
     end
     local shield = warrior and off and getEquipmentType(off) == "INVTYPE_SHIELD"
     if itemClass == Enum.ItemClass.Weapon and subclass ~= Enum.ItemWeaponSubclass.Fishingpole then
+        local proposal = { profile = profile, slot = MAIN_HAND, id = main }
         local name = GetInventoryItemLink("player", MAIN_HAND) or ("Gegenstand %d"):format(main)
         if shield and location ~= "INVTYPE_2HWEAPON" then
             local shieldName = GetInventoryItemLink("player", OFF_HAND) or ("Schild %d"):format(off)
-            activePrompt = WARRIOR_PROMPT
-            StaticPopup_Show(activePrompt, name, shieldName, proposal)
+            proposal.shield = off
+            presentPrompt(proposal, WARRIOR_PROMPT, name, shieldName)
             return
         end
         local dagger = subclass == Enum.ItemWeaponSubclass.Dagger
         proposal.role = warrior and "offense" or (dagger and "dagger" or "main")
         local label = warrior and "Offensivwaffe" or (dagger and "Dolch" or "Hauptwaffe")
-        activePrompt = EQUIPMENT_PROMPT
-        StaticPopup_Show(activePrompt, name, label, proposal)
-    elseif offChanged and shield and off ~= weapons.shield then
-        proposal.role = "shield"
+        presentPrompt(proposal, EQUIPMENT_PROMPT, name, label)
+        return
+    end
+
+    if activePrompt or not offChanged or not off then
+        return
+    end
+    local role, label
+    if warrior then
+        if shield and off ~= db.weapons.shield then
+            role, label = "shield", "Schild"
+        end
+    elseif not isKnownWeapon(db, off) then
+        local offLocation, offClass, offSubclass = getEquipmentType(off)
+        if offClass == Enum.ItemClass.Weapon and offSubclass == Enum.ItemWeaponSubclass.Dagger
+            and offLocation == "INVTYPE_WEAPON" then
+            role, label = "dagger", "Dolch für die Haupthand"
+        end
+    end
+    if role then
         local name = GetInventoryItemLink("player", OFF_HAND) or ("Gegenstand %d"):format(off)
-        activePrompt = EQUIPMENT_PROMPT
-        StaticPopup_Show(activePrompt, name, "Schild", proposal)
+        presentPrompt({ profile = profile, slot = OFF_HAND, id = off, role = role }, EQUIPMENT_PROMPT, name, label)
     end
 end
 
@@ -321,7 +360,7 @@ watcher:SetScript("OnEvent", function(self)
     end
     local warrior = class == "WARRIOR"
     local previousMain = GetInventoryItemID("player", MAIN_HAND)
-    local previousOff = warrior and GetInventoryItemID("player", OFF_HAND)
+    local previousOff = GetInventoryItemID("player", OFF_HAND)
     local scheduled, pending
 
     local function checkEquipment()
@@ -332,25 +371,33 @@ watcher:SetScript("OnEvent", function(self)
         end
         pending = false
         local main = GetInventoryItemID("player", MAIN_HAND)
-        local off = warrior and GetInventoryItemID("player", OFF_HAND)
+        local off = GetInventoryItemID("player", OFF_HAND)
         local mainChanged, offChanged = main ~= previousMain, off ~= previousOff
         previousMain, previousOff = main, off
         if mainChanged or offChanged then
-            closePrompt()
-            if not menu or not menu:IsShown() then
-                showEquipmentPrompt(profile, warrior, main, off, mainChanged, offChanged)
+            if activePrompt then
+                local sameItem = (activePrompt.slot == MAIN_HAND and main == activePrompt.id)
+                    or (activePrompt.slot == OFF_HAND and off == activePrompt.id)
+                if not sameItem then
+                    closePrompt()
+                elseif activePrompt.shield and off ~= activePrompt.shield then
+                    closePrompt()
+                    mainChanged = true
+                end
             end
+            showEquipmentPrompt(profile, warrior, main, off, mainChanged, offChanged)
         end
     end
 
     self:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+    self:RegisterUnitEvent("UNIT_INVENTORY_CHANGED", "player")
     self:RegisterEvent("PLAYER_REGEN_ENABLED")
     self:SetScript("OnEvent", function(_, event, slot)
-        local equipmentChanged = event == "PLAYER_EQUIPMENT_CHANGED"
-            and (slot == MAIN_HAND or (warrior and slot == OFF_HAND))
+        local equipmentChanged = event == "UNIT_INVENTORY_CHANGED"
+            or (event == "PLAYER_EQUIPMENT_CHANGED" and (slot == MAIN_HAND or slot == OFF_HAND))
         if not scheduled and (equipmentChanged or (event == "PLAYER_REGEN_ENABLED" and pending)) then
             scheduled = true
-            C_Timer.After(0, checkEquipment)
+            C_Timer.After(0.1, checkEquipment)
         end
     end)
 end)
