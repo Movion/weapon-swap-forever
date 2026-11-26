@@ -12,15 +12,19 @@ Run `/wsf sync` once out of combat after upgrading from an earlier version or sw
 
 ## New gear
 
-When you equip an unsaved main-hand weapon, a Blizzard dialog asks whether to update your macros. Rogues also get a prompt for a new off-hand dagger that can be equipped in the main hand. Warriors with a shield equipped can choose **Offense** or **Defense** for a new one-handed weapon. **Defense** saves the shield as well. You can also save a new shield on its own.
+When you equip an unsaved main-hand weapon, a Blizzard dialog previews the changes. It lists the macros that use the proposed default and says which will be created, updated, or held until setup is complete. Rogues also get a prompt for a new off-hand dagger that can be equipped in the main hand. Warriors with a shield equipped can choose **Offense** or **Defense** for a new one-handed weapon. **Defense** saves the shield as well. You can also save a new shield on its own.
 
 Switching between saved weapons does not prompt you. For a swap made in combat, the prompt appears after combat if the new item is still equipped. Your macros are updated after you confirm.
 
 ## Weapons by ability
 
-Click the sword-and-dagger icon in the minimap's AddOn Compartment, run `/wsf`, or choose **Menu** in the equipment prompt. Equip a weapon in your main hand and click **Set Weapon** next to an ability. For example, you can use different daggers for Ambush and Backstab. **Default** switches that ability back to its shared weapon.
+Click the sword-and-dagger icon in the minimap's AddOn Compartment, run `/wsf`, or choose **Menu** in the equipment prompt. The settings window shows which weapons are equipped, which are saved as defaults, and the current status of each macro.
 
-To add another learned active ability, equip the weapon first, enter the ability name or spell ID, and click **Add**. Click **Macro** to pick up the macro, then place it on your action bar. You can also drag it from `/macro`. Drag the menu by its title bar. The scrollbar appears when the list exceeds the visible area.
+- **Save Equipped** updates a shared default and the macros that use it. Individual ability assignments carry over.
+- **Use Equipped** next to an ability assigns the weapon in your main hand to that macro. **Use Default** returns the ability to its shared weapon.
+- **Sync Macros** creates missing macros or updates existing macros from saved assignments. The status line shows what succeeded and what still needs attention. Equip weapons with your action bar macros.
+
+To add another learned active ability, equip the weapon first, enter the ability name or spell ID, and click **Add**. For a ready macro, choose **Place on Bar** and click an action bar slot. You can also drag the macro from `/macro`. Drag the menu by its title bar. The scrollbar appears when the list exceeds the visible area.
 
 ## Rogue
 

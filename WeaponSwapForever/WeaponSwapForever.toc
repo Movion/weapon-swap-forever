@@ -2,7 +2,7 @@
 ## Title: Weapon Swap Forever
 ## Notes: Manages weapon swap macros for rogues and warriors.
 ## Notes-deDE: Verwaltet Waffenwechsel-Makros für Schurken und Krieger.
-## Version: 1.2.1
+## Version: 1.3.0
 ## IconTexture: Interface\AddOns\WeaponSwapForever\Icon.tga
 ## AddonCompartmentFunc: WeaponSwapForever_OnCompartmentClick
 ## SavedVariablesPerCharacter: WeaponSwapForeverDB

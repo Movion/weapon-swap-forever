@@ -7,6 +7,14 @@ local MARKER = "# WeaponSwapForever"
 local QUESTION_MARK = 134400
 local menu, openMenu, refreshMenu
 local database
+local syncingMacros
+local ROLE_LABELS = {
+    main = VALUES.MAIN_HAND,
+    dagger = VALUES.DAGGER,
+    offense = VALUES.OFFENSIVE_WEAPON,
+    defense = VALUES.DEFENSIVE_WEAPON,
+    shield = VALUES.SHIELD,
+}
 
 local profiles = {
     ROGUE = {
@@ -38,6 +46,9 @@ local profiles = {
 
 local function say(message)
     print("|cffffd100" .. VALUES.ADDON_NAME .. "|r " .. message)
+    if menu and menu:IsShown() then
+        menu.feedback:SetText(message)
+    end
 end
 
 local function getDatabase()
@@ -131,6 +142,39 @@ local function findManagedMacro(spec)
     return index, body, conflict, false
 end
 
+local function macroState(spec, db)
+    local body, message = buildMacro(spec, db)
+    if message then
+        return "blocked", message
+    end
+    if not body then
+        local missing = spec.off
+        if not db.assigned[spec.name] and spec.main and not db.weapons[spec.main] then
+            missing = spec.main
+        end
+        return "setup", missing and VALUES.STATUS_SAVE_GEAR:format(ROLE_LABELS[missing]) or VALUES.STATUS_ASSIGN_WEAPON
+    end
+
+    local index, currentBody, conflict, legacy = findManagedMacro(spec)
+    if conflict then
+        return "blocked", VALUES.STATUS_NAME_CONFLICT
+    end
+    if #body > 255 then
+        return "blocked", VALUES.STATUS_TOO_LONG
+    end
+    if not index then
+        local _, count = GetNumMacros()
+        if count >= Constants.MacroConsts.MAX_CHARACTER_MACROS then
+            return "blocked", VALUES.STATUS_FULL
+        end
+        return "pending", VALUES.STATUS_CREATE, true
+    end
+    if legacy or currentBody ~= body then
+        return "pending", VALUES.STATUS_UPDATE
+    end
+    return "ready", VALUES.STATUS_READY
+end
+
 local function writeMacro(spec, body)
     local name = spec.name
     local index, currentBody, conflict, legacy = findManagedMacro(spec)
@@ -138,7 +182,7 @@ local function writeMacro(spec, body)
         return false, VALUES.MACRO_CONFLICT:format(name)
     end
     if not legacy and currentBody == body then
-        return true
+        return true, false
     end
     if #body > 255 then
         return false, VALUES.MACRO_LIMIT:format(name)
@@ -157,34 +201,43 @@ local function writeMacro(spec, body)
     if ok then
         local _, actualBody = findCharacterMacro(name)
         if actualBody == body then
-            return true
+            return true, true
         end
     end
     return false, VALUES.MACRO_SAVE_FAILED:format(name)
 end
 
-local function sync(profile, db)
-    local ready, failed = 0, 0
-    local specs = macroSpecs(profile, db)
+local function sync(profile, db, specs)
+    local changed, current, waiting, failed = 0, 0, 0, 0
+    local firstError
+    specs = specs or macroSpecs(profile, db)
+    syncingMacros = true
     for _, spec in ipairs(specs) do
         local body, message = buildMacro(spec, db)
         if body then
-            local ok
-            ok, message = writeMacro(spec, body)
+            local ok, result = writeMacro(spec, body)
             if ok then
-                ready = ready + 1
+                if result then
+                    changed = changed + 1
+                else
+                    current = current + 1
+                end
+            else
+                message = result
             end
+        elseif not message then
+            waiting = waiting + 1
         end
         if message then
             say(message)
+            firstError = firstError or message
             failed = failed + 1
         end
     end
-    say(VALUES.MACROS_CURRENT:format(ready, #specs))
-    if failed > 0 then
-        say(VALUES.RETRY_SYNC)
-    elseif ready < #specs then
-        say(profile.hint)
+    syncingMacros = false
+    say(VALUES.SYNC_RESULT:format(changed, current, waiting, failed))
+    if firstError and menu and menu:IsShown() then
+        menu.feedback:SetText(firstError)
     end
     if refreshMenu then
         refreshMenu()
@@ -219,6 +272,37 @@ local function readEquipped(role, sourceSlot)
     return { id = itemID, link = GetInventoryItemLink("player", slot) }
 end
 
+local function presetMacros(profile, db, role)
+    local affected = {}
+    for _, spec in ipairs(profile.macros) do
+        if (spec.main == role and not db.assigned[spec.name]) or spec.off == role
+            or (role == "defense" and spec.off == "shield") then
+            affected[#affected + 1] = spec
+        end
+    end
+    return affected
+end
+
+local function presetPreview(profile, db, role, itemID, shieldID)
+    local weapons = setmetatable({ [role] = itemID }, { __index = db.weapons })
+    if shieldID then
+        weapons.shield = shieldID
+    end
+    local projected = { weapons = weapons, assigned = db.assigned }
+    local lines = {}
+    local _, count = GetNumMacros()
+    local freeSlots = Constants.MacroConsts.MAX_CHARACTER_MACROS - count
+    for _, spec in ipairs(presetMacros(profile, db, role)) do
+        local _, detail, needsSlot = macroState(spec, projected)
+        if needsSlot then
+            detail = freeSlots > 0 and detail or VALUES.STATUS_FULL
+            freeSlots = freeSlots - 1
+        end
+        lines[#lines + 1] = spec.name .. " — " .. detail
+    end
+    return #lines > 0 and table.concat(lines, "\n") or VALUES.PRESET_NO_MACROS
+end
+
 local function capture(profile, command, db, sourceSlot)
     local selection = {}
     for _, role in ipairs(profile.roles) do
@@ -234,8 +318,15 @@ local function capture(profile, command, db, sourceSlot)
     for key, item in pairs(selection) do
         db.weapons[key], db.links[key] = item.id, item.link
     end
-    say(VALUES.EQUIPMENT_SAVED)
-    sync(profile, db)
+    local specs = presetMacros(profile, db, command)
+    if #specs > 0 then
+        sync(profile, db, specs)
+    else
+        say(VALUES.PRESET_SAVED_NO_MACROS)
+        if refreshMenu then
+            refreshMenu()
+        end
+    end
 end
 
 local EQUIPMENT_PROMPT = "WEAPON_SWAP_FOREVER_EQUIPMENT"
@@ -342,13 +433,17 @@ local function showEquipmentPrompt(profile, warrior, main, off, mainChanged, off
         if shield and location ~= "INVTYPE_2HWEAPON" then
             local shieldName = GetInventoryItemLink("player", OFF_HAND) or VALUES.SHIELD_NUMBER:format(off)
             proposal.shield = off
-            presentPrompt(proposal, WARRIOR_PROMPT, name, shieldName)
+            local offense = presetPreview(profile, db, "offense", main)
+            local defense = presetPreview(profile, db, "defense", main, off)
+            local preview = VALUES.WARRIOR_PREVIEW:format(offense, shieldName, defense)
+            presentPrompt(proposal, WARRIOR_PROMPT, name, preview)
             return
         end
         local dagger = subclass == Enum.ItemWeaponSubclass.Dagger
         proposal.role = warrior and "offense" or (dagger and "dagger" or "main")
         local label = warrior and VALUES.OFFENSIVE_WEAPON or (dagger and VALUES.DAGGER or VALUES.MAIN_HAND)
-        presentPrompt(proposal, EQUIPMENT_PROMPT, name, label)
+        local preview = VALUES.PRESET_PREVIEW:format(label, presetPreview(profile, db, proposal.role, main))
+        presentPrompt(proposal, EQUIPMENT_PROMPT, name, preview)
         return
     end
 
@@ -369,7 +464,8 @@ local function showEquipmentPrompt(profile, warrior, main, off, mainChanged, off
     end
     if role then
         local name = GetInventoryItemLink("player", OFF_HAND) or VALUES.ITEM_NUMBER:format(off)
-        presentPrompt({ profile = profile, slot = OFF_HAND, id = off, role = role }, EQUIPMENT_PROMPT, name, label)
+        local preview = VALUES.PRESET_PREVIEW:format(label, presetPreview(profile, db, role, off))
+        presentPrompt({ profile = profile, slot = OFF_HAND, id = off, role = role }, EQUIPMENT_PROMPT, name, preview)
     end
 end
 
@@ -410,13 +506,22 @@ watcher:SetScript("OnEvent", function(self)
                 end
             end
             showEquipmentPrompt(profile, warrior, main, off, mainChanged, offChanged)
+            if refreshMenu then
+                refreshMenu()
+            end
         end
     end
 
     self:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
     self:RegisterUnitEvent("UNIT_INVENTORY_CHANGED", "player")
     self:RegisterEvent("PLAYER_REGEN_ENABLED")
+    self:RegisterEvent("PLAYER_REGEN_DISABLED")
+    self:RegisterEvent("UPDATE_MACROS")
     self:SetScript("OnEvent", function(_, event, slot)
+        if refreshMenu and not syncingMacros
+            and (event == "UPDATE_MACROS" or event == "PLAYER_REGEN_ENABLED" or event == "PLAYER_REGEN_DISABLED") then
+            refreshMenu()
+        end
         local equipmentChanged = event == "UNIT_INVENTORY_CHANGED"
             or (event == "PLAYER_EQUIPMENT_CHANGED" and (slot == MAIN_HAND or slot == OFF_HAND))
         if not scheduled and (equipmentChanged or (event == "PLAYER_REGEN_ENABLED" and pending)) then
@@ -457,6 +562,7 @@ SlashCmdList.WEAPONSWAPFOREVER = function(input)
             say(VALUES.COMBAT_SYNC)
             return
         end
+        closePrompt()
         sync(profile, db)
         return
     end
@@ -510,45 +616,50 @@ local function assignWeapon(profile, spec)
         return
     end
     local db = getDatabase()
+    closePrompt()
     db.assigned[spec.name] = item
-    sync(profile, db)
+    sync(profile, db, { spec })
 end
+
+local ROW_HEIGHT = 58
 
 local function createRow(parent, profile, spec, index)
     local row = CreateFrame("Frame", nil, parent)
-    row:SetPoint("TOPLEFT", 0, -(index - 1) * 44)
-    row:SetSize(544, 44)
+    row:SetPoint("TOPLEFT", 0, -(index - 1) * ROW_HEIGHT)
+    row:SetSize(688, ROW_HEIGHT)
 
     local skill = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     skill:SetPoint("TOPLEFT", 0, -4)
-    skill:SetWidth(270)
+    skill:SetWidth(326)
     skill:SetJustifyH("LEFT")
     skill:SetWordWrap(false)
-    skill:SetText((spec.spell and C_Spell.GetSpellName(spec.spell)) or spec.label or spec.name)
+    local ability = (spec.spell and C_Spell.GetSpellName(spec.spell)) or spec.label
+    skill:SetText(ability and (ability .. " |cffb0b0b0(" .. spec.name .. ")|r") or spec.name)
 
     row.weapon = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    row.weapon:SetPoint("TOPLEFT", skill, "BOTTOMLEFT", 0, -4)
-    row.weapon:SetWidth(270)
+    row.weapon:SetPoint("TOPLEFT", 0, -26)
+    row.weapon:SetWidth(680)
     row.weapon:SetJustifyH("LEFT")
     row.weapon:SetWordWrap(false)
 
-    local assign = createButton(row, VALUES.SET_WEAPON, 100, function()
+    row.assign = createButton(row, VALUES.SET_WEAPON, 119, function()
         assignWeapon(profile, spec)
     end)
-    assign:SetPoint("LEFT", 275, 0)
+    row.assign:SetPoint("TOPLEFT", 332, -1)
 
-    row.reset = createButton(row, VALUES.DEFAULT, 75, function()
+    row.reset = createButton(row, VALUES.DEFAULT, 119, function()
         if InCombatLockdown() then
             say(VALUES.ASSIGNMENT_OUT_OF_COMBAT)
             return
         end
         local db = getDatabase()
+        closePrompt()
         db.assigned[spec.name] = nil
-        sync(profile, db)
+        sync(profile, db, { spec })
     end)
-    row.reset:SetPoint("LEFT", assign, "RIGHT", 4, 0)
+    row.reset:SetPoint("LEFT", row.assign, "RIGHT", 4, 0)
 
-    row.pickup = createButton(row, VALUES.MACRO, 75, function()
+    row.pickup = createButton(row, VALUES.MACRO, 110, function()
         if InCombatLockdown() then
             say(VALUES.COMBAT_PLACE_MACRO)
             return
@@ -556,9 +667,16 @@ local function createRow(parent, profile, spec, index)
         local macroIndex = findManagedMacro(spec)
         if macroIndex then
             PickupMacro(macroIndex)
+            say(VALUES.PLACE_MACRO_HINT:format(spec.name))
         end
     end)
     row.pickup:SetPoint("LEFT", row.reset, "RIGHT", 4, 0)
+
+    row.status = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.status:SetPoint("TOPLEFT", row.weapon, "BOTTOMLEFT", 0, -4)
+    row.status:SetWidth(680)
+    row.status:SetJustifyH("LEFT")
+    row.status:SetWordWrap(false)
     return row
 end
 
@@ -589,6 +707,7 @@ local function addAbility(profile, input)
         return
     end
     local spec = { name = "WSF " .. spell.spellID, spell = spell.spellID }
+    closePrompt()
     db.assigned[spec.name] = item
     local body, errorMessage = buildMacro(spec, db)
     local saved
@@ -603,13 +722,25 @@ local function addAbility(profile, input)
     db.custom[#db.custom + 1] = spec
     input:SetText("")
     input:ClearFocus()
+    say(VALUES.ABILITY_ADDED:format(spec.name))
     refreshMenu()
 end
+
+local function displayItem(id, link, missing)
+    return link or (id and VALUES.ITEM_NUMBER:format(id)) or missing
+end
+
+local STATUS_COLORS = {
+    ready = { 0.4, 0.9, 0.5 },
+    pending = { 1, 0.82, 0 },
+    setup = { 0.8, 0.8, 0.8 },
+    blocked = { 1, 0.42, 0.36 },
+}
 
 openMenu = function(profile)
     if not menu then
         menu = CreateFrame("Frame", "WeaponSwapForeverMenu", UIParent, "ButtonFrameTemplate")
-        menu:SetSize(602, 360)
+        menu:SetSize(744, 535)
         menu:SetPoint("CENTER")
         menu:SetFrameStrata("DIALOG")
         menu:EnableMouse(true)
@@ -628,20 +759,69 @@ openMenu = function(profile)
         dragHandle:SetScript("OnDragStop", function() menu:StopMovingOrSizing() end)
         menu:HookScript("OnHide", menu.StopMovingOrSizing)
 
-        local instructions = menu:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        instructions:SetPoint("TOPLEFT", 16, -35)
-        instructions:SetText(VALUES.MENU_INSTRUCTIONS)
+        local summary = menu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        summary:SetPoint("TOPLEFT", 16, -35)
+        local syncButton = createButton(menu, VALUES.SYNC_BUTTON, 145, function()
+            SlashCmdList.WEAPONSWAPFOREVER("sync")
+        end)
+        syncButton:SetPoint("TOPRIGHT", -18, -28)
+
+        local syncHelp = menu:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        syncHelp:SetPoint("TOPLEFT", 16, -58)
+        syncHelp:SetWidth(706)
+        syncHelp:SetJustifyH("LEFT")
+
+        local presets = menu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        presets:SetPoint("TOPLEFT", 16, -84)
+        presets:SetText(VALUES.PRESET_HEADING)
+        local presetRows = {}
+        for index, role in ipairs(profile.roles) do
+            local key = role.key
+            local line = menu:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            line:SetPoint("TOPLEFT", 16, -110 - (index - 1) * 25)
+            line:SetWidth(518)
+            line:SetJustifyH("LEFT")
+            line:SetWordWrap(false)
+            local label = key == "defense" and VALUES.SAVE_DEFENSE_SET or VALUES.SAVE_EQUIPPED
+            local save = createButton(menu, label, 177, function()
+                SlashCmdList.WEAPONSWAPFOREVER(key)
+            end)
+            save:SetPoint("LEFT", line, "RIGHT", 6, 0)
+            presetRows[index] = { line = line, button = save }
+        end
+
+        local presetHeight = #profile.roles * 25
+        local equipped = menu:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        equipped:SetPoint("TOPLEFT", 16, -115 - presetHeight)
+        equipped:SetWidth(706)
+        equipped:SetJustifyH("LEFT")
+        equipped:SetWordWrap(false)
+
+        local macrosHeading = menu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        macrosHeading:SetPoint("TOPLEFT", 16, -140 - presetHeight)
+        macrosHeading:SetText(VALUES.MACRO_HEADING)
+        local macroHelp = menu:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        macroHelp:SetPoint("TOPLEFT", 16, -158 - presetHeight)
+        macroHelp:SetWidth(706)
+        macroHelp:SetJustifyH("LEFT")
+        macroHelp:SetText(VALUES.MENU_INSTRUCTIONS)
 
         local scroll = CreateFrame("ScrollFrame", nil, menu, "UIPanelScrollFrameTemplate")
-        scroll:SetPoint("TOPLEFT", 16, -55)
-        scroll:SetPoint("BOTTOMRIGHT", -36, 54)
+        scroll:SetPoint("TOPLEFT", 16, -181 - presetHeight)
+        scroll:SetPoint("BOTTOMRIGHT", -36, 64)
         scroll.ScrollBar:Hide()
         scroll:HookScript("OnScrollRangeChanged", function(self, _, verticalRange)
             self.ScrollBar:SetShown(verticalRange > 0)
         end)
         local content = CreateFrame("Frame", nil, scroll)
-        content:SetWidth(544)
+        content:SetWidth(688)
         scroll:SetScrollChild(content)
+
+        menu.feedback = menu:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        menu.feedback:SetPoint("BOTTOMLEFT", 16, 44)
+        menu.feedback:SetWidth(706)
+        menu.feedback:SetJustifyH("LEFT")
+        menu.feedback:SetWordWrap(false)
 
         local label = menu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         label:SetPoint("BOTTOMLEFT", 16, 20)
@@ -662,7 +842,23 @@ openMenu = function(profile)
                 return
             end
             local db = getDatabase()
+            local combat = InCombatLockdown()
+            syncHelp:SetText(combat and VALUES.COMBAT_SYNC
+                or (VALUES.SYNC_EXPLANATION .. "\n" .. VALUES.NEW_GEAR_EXPLANATION))
+            for index, role in ipairs(profile.roles) do
+                local preset = presetRows[index]
+                local saved = displayItem(db.weapons[role.key], db.links[role.key], VALUES.NOT_SELECTED)
+                preset.line:SetText(role.label .. " — " .. saved)
+                preset.button:SetEnabled(not combat)
+            end
+            local main = displayItem(GetInventoryItemID("player", MAIN_HAND),
+                GetInventoryItemLink("player", MAIN_HAND), VALUES.EMPTY_SLOT)
+            local off = displayItem(GetInventoryItemID("player", OFF_HAND),
+                GetInventoryItemLink("player", OFF_HAND), VALUES.EMPTY_SLOT)
+            equipped:SetText(VALUES.EQUIPPED_NOW:format(main, off))
+
             local specs = macroSpecs(profile, db)
+            local counts = { ready = 0, pending = 0, setup = 0, blocked = 0 }
             for index, spec in ipairs(specs) do
                 local row = rows[index] or createRow(content, profile, spec, index)
                 rows[index] = row
@@ -670,13 +866,29 @@ openMenu = function(profile)
                 local default = db.weapons[spec.main]
                 local itemID = assigned and assigned.id or default
                 local link = assigned and assigned.link or (not assigned and db.links[spec.main])
-                local text = link or (itemID and VALUES.ITEM_NUMBER:format(itemID)) or VALUES.NO_WEAPON
-                row.weapon:SetText(text .. (default and not assigned and VALUES.DEFAULT_SUFFIX or ""))
-                row.reset:SetEnabled(assigned ~= nil and default ~= nil and (not spec.off or db.weapons[spec.off] ~= nil))
+                local text = displayItem(itemID, link, VALUES.NO_WEAPON)
+                local suffix = assigned and VALUES.CUSTOM_SUFFIX
+                    or (spec.main and VALUES.DEFAULT_SOURCE:format(ROLE_LABELS[spec.main]) or "")
+                if spec.off then
+                    local shield = displayItem(db.weapons[spec.off], db.links[spec.off], VALUES.NOT_SELECTED)
+                    text = text .. suffix .. VALUES.WEAPON_WITH_SHIELD:format(shield)
+                else
+                    text = text .. suffix
+                end
+                row.weapon:SetText(text)
+                local state, detail = macroState(spec, db)
+                counts[state] = counts[state] + 1
+                row.status:SetText(detail)
+                row.status:SetTextColor(unpack(STATUS_COLORS[state]))
+                row.assign:SetEnabled(not combat)
+                row.reset:SetEnabled(not combat and assigned ~= nil and default ~= nil)
                 row.reset:SetShown(spec.main ~= nil)
-                row.pickup:SetEnabled(findManagedMacro(spec) ~= nil)
+                row.pickup:SetEnabled(not combat and state == "ready")
             end
-            local contentHeight = math.max(1, #specs * 44)
+            summary:SetText(VALUES.MACRO_SUMMARY:format(counts.ready, counts.pending, counts.setup, counts.blocked))
+            syncButton:SetEnabled(not combat and counts.pending > 0)
+            add:SetEnabled(not combat)
+            local contentHeight = math.max(1, #specs * ROW_HEIGHT)
             content:SetHeight(contentHeight)
             scroll.ScrollBar:SetShown(contentHeight > scroll:GetHeight())
         end
