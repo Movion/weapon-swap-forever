@@ -481,6 +481,10 @@ SlashCmdList.WEAPONSWAPFOREVER = function(input)
     say(VALUES.HELP_COMMON)
 end
 
+function WeaponSwapForever_OnCompartmentClick()
+    SlashCmdList.WEAPONSWAPFOREVER("menu")
+end
+
 local function createButton(parent, label, width, onClick)
     local button = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
     button:SetSize(width, 22)

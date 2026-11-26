@@ -18,7 +18,7 @@ Switching between saved weapons does not prompt you. For a swap made in combat, 
 
 ## Weapons by ability
 
-Open the menu with `/wsf` or choose **Menu** in the equipment prompt. Equip a weapon in your main hand and click **Set Weapon** next to an ability. For example, you can use different daggers for Ambush and Backstab. **Default** switches that ability back to its shared weapon.
+Click the sword-and-dagger icon in the minimap's AddOn Compartment, run `/wsf`, or choose **Menu** in the equipment prompt. Equip a weapon in your main hand and click **Set Weapon** next to an ability. For example, you can use different daggers for Ambush and Backstab. **Default** switches that ability back to its shared weapon.
 
 To add another learned active ability, equip the weapon first, enter the ability name or spell ID, and click **Add**. Click **Macro** to pick up the macro, then place it on your action bar. You can also drag it from `/macro`. Drag the menu by its title bar. The scrollbar appears when the list exceeds the visible area.
 
