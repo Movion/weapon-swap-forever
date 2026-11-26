@@ -2,6 +2,8 @@
 
 Addon für World of Warcraft: Forever 1.60.1 (Interface 16001). Es erkennt neu angelegte Waffen und pflegt auf Wunsch die WoW-Charaktermakros. Es nutzt Blizzard-Dialoge, das Makrofenster und die normale Aktionsleiste. Das Addon reagiert auf Ausrüstungsereignisse und kommt ohne Bibliotheken oder laufende Hintergrundabfragen aus.
 
+Dieses Addon wurde mit Unterstützung von KI entwickelt.
+
 ## Installation
 
 Entpacke `WeaponSwapForever-1.1.1.zip` in `World of Warcraft\_forever_\Interface\AddOns`. Danach muss dort `WeaponSwapForever\WeaponSwapForever.toc` liegen. Starte WoW neu und prüfe im AddOn-Menü, ob **Weapon Swap Forever** aktiv ist. Nach einem Update von 1.0.0 führe einmal außerhalb des Kampfes `/wsf sync` aus, um die vorhandenen Makros zu aktualisieren.
