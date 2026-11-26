@@ -1,52 +1,51 @@
 # Weapon Swap Forever
 
-Addon für World of Warcraft: Forever 1.60.1 (Interface 16001). Es erkennt neu angelegte Waffen und pflegt auf Wunsch die WoW-Charaktermakros. Es nutzt Blizzard-Dialoge, das Makrofenster und die normale Aktionsleiste. Das Addon reagiert auf Ausrüstungsereignisse und kommt ohne Bibliotheken oder laufende Hintergrundabfragen aus.
+A lightweight addon for World of Warcraft: Forever 1.60.1 (interface 16001). It helps rogues and warriors maintain weapon swap macros as they acquire new gear. It uses Blizzard windows and character macros and runs without external libraries or background polling.
 
-Dieses Addon wurde mit Unterstützung von KI entwickelt.
+This addon was developed with AI assistance.
 
 ## Installation
 
-Entpacke `WeaponSwapForever-1.1.2.zip` in `World of Warcraft\_forever_\Interface\AddOns`. Danach muss dort `WeaponSwapForever\WeaponSwapForever.toc` liegen. Starte WoW neu und prüfe im AddOn-Menü, ob **Weapon Swap Forever** aktiv ist. Nach einem Update von 1.0.0 führe einmal außerhalb des Kampfes `/wsf sync` aus, um die vorhandenen Makros zu aktualisieren.
+Download the installation ZIP from [GitHub Releases](https://github.com/Movion/weapon-swap-forever/releases/latest) and extract it into `World of Warcraft\_forever_\Interface\AddOns`. The resulting folder should contain `WeaponSwapForever\WeaponSwapForever.toc`. Restart WoW and enable **Weapon Swap Forever** in the AddOns list.
 
-## Neue Ausrüstung übernehmen
+Run `/wsf sync` once out of combat after upgrading from an earlier version or switching client languages. Earlier rogue macros are renamed in place, and saved weapon assignments carry over.
 
-Wenn du eine bisher ungespeicherte Waffe in der Haupthand anlegst, fragt ein Blizzard-Dialog, ob das Addon deine Makros dafür aktualisieren soll. Die Abfrage erscheint auch bei geöffnetem Addon-Menü. Beim Schurken schlägt das Addon für einen Dolch die Dolchmakros vor und für andere Waffen die normale Hauptwaffe. Wenn du einen Dolch zuerst in der Nebenhand anlegst, kann das Addon ihn ebenfalls für die Dolchmakros übernehmen, sofern du ihn in der Haupthand tragen kannst. Wenn du als Krieger eine neue Einhandwaffe mit angelegtem Schild ausrüstest, kannst du **Offense** oder **Defense** wählen. Bei **Defense** übernimmt das Addon den angelegten Schild mit. Einen neu angelegten Schild kannst du auch einzeln übernehmen.
+## New gear
 
-Beim Wechsel zwischen gespeicherten Waffen erscheint keine Abfrage. Bei einem Wechsel im Kampf erscheint sie danach, wenn der neue Gegenstand noch angelegt ist. Mit **Abbrechen** behältst du deine bisherigen Makros. Die Chatbefehle bleiben für die manuelle Auswahl verfügbar.
+When you equip an unsaved main-hand weapon, a Blizzard dialog asks whether to update your macros. Rogues also get a prompt for a new off-hand dagger that can be equipped in the main hand. Warriors with a shield equipped can choose **Offense** or **Defense** for a new one-handed weapon. **Defense** saves the shield as well. You can also save a new shield on its own.
 
-## Waffe pro Fähigkeit einstellen
+Switching between saved weapons does not prompt you. For a swap made in combat, the prompt appears after combat if the new item is still equipped. Your macros are updated after you confirm.
 
-Öffne das Menü mit `/wsf` oder über **Menü** in der Ausrüstungsabfrage. Lege die gewünschte Waffe in der Haupthand an und klicke bei der Fähigkeit auf **Waffe setzen**. So kannst du etwa Hinterhalt und Meucheln unterschiedliche Dolche zuweisen. Änderungen an der gemeinsamen Standardwaffe greifen bei Makros, die den Standard verwenden. Mit **Standard** kehrst du zur gespeicherten Standardwaffe zurück.
+## Weapons by ability
 
-Ziehe das Fenster mit der linken Maustaste an der Titelleiste. Die Scrollleiste erscheint, wenn die Liste länger als der sichtbare Bereich ist.
+Open the menu with `/wsf` or choose **Menu** in the equipment prompt. Equip a weapon in your main hand and click **Set Weapon** next to an ability. For example, you can use different daggers for Ambush and Backstab. **Default** switches that ability back to its shared weapon.
 
-Für eine weitere erlernte aktive Fähigkeit gib unten ihren Namen oder ihre Zauber-ID ein und klicke mit angelegter Waffe auf **Hinzufügen**. **Makro** nimmt das jeweilige Makro an den Cursor, damit du es auf einen freien Platz der Aktionsleiste legen kannst. Du kannst es auch wie gewohnt aus `/macro` ziehen.
+To add another learned active ability, equip the weapon first, enter the ability name or spell ID, and click **Add**. Click **Macro** to pick up the macro, then place it on your action bar. You can also drag it from `/macro`. Drag the menu by its title bar. The scrollbar appears when the list exceeds the visible area.
 
-## Schurke
+## Rogue
 
-1. Lege deine normale Waffe (z. B. Hauklinge) in der Haupthand an und bestätige die Abfrage oder gib `/wsf main` ein.
-2. Lege deinen Dolch in der Haupthand an und bestätige die Abfrage oder gib `/wsf dagger` ein.
-3. Öffne `/macro` und ziehe **WSF Finster**, **WSF Hinterhalt**, **WSF Meucheln** und bei Bedarf **WSF Hauptwaffe** vom Tab mit den Charaktermakros in deine Aktionsleiste. Die Plätze und Tastenbelegungen wählst du selbst.
+1. Equip your regular main-hand weapon and confirm the prompt or run `/wsf main`.
+2. Equip your dagger and confirm the prompt or run `/wsf dagger` with the dagger in your main hand.
+3. Add **WSF Sinister**, **WSF Ambush**, **WSF Backstab**, and optionally **WSF Main Hand** to your action bar. Assign any keybinds you like.
 
-**WSF Finster** wechselt zur normalen Hauptwaffe und versucht erst Riposte, dann Finsterer Stoß. **WSF Hinterhalt** und **WSF Meucheln** legen den Dolch an und versuchen die jeweilige Fähigkeit. Hat der Wechsel die globale Abklingzeit ausgelöst, löse das Makro danach erneut aus. **WSF Hauptwaffe** rüstet die normale Hauptwaffe aus.
+**WSF Sinister** equips your regular main-hand weapon and attempts Riposte, then Sinister Strike. **WSF Ambush** and **WSF Backstab** equip a dagger and attempt the corresponding ability. If the swap triggers the global cooldown, press the macro again once it ends. **WSF Main Hand** equips your regular weapon.
 
-Ein neuer Dolch aktualisiert nach der Bestätigung beide Dolchmakros. Eine neue Hauptwaffe aktualisiert **WSF Finster** und **WSF Hauptwaffe**. Wenn du einen Dolch als normale Hauptwaffe verwenden willst, speichere ihn mit `/wsf main`.
+Saving a new dagger updates the macros using the shared dagger. Saving a new regular main-hand weapon updates the macros using that weapon. To use a dagger as your regular weapon, save it with `/wsf main`.
 
-## Krieger
+## Warrior
 
-1. Lege deine Offensivwaffe an und gib `/wsf offense` ein.
-2. Lege deine Defensivwaffe samt Schild an und gib `/wsf defense` ein.
-3. Ziehe **WSF Offense** und **WSF Defense** aus den Charaktermakros in die Aktionsleiste.
+1. Equip your offensive weapon and run `/wsf offense`.
+2. Equip your defensive weapon and shield and run `/wsf defense`.
+3. Add **WSF Offense** and **WSF Defense** to your action bar.
 
-**WSF Offense** versucht Kampfhaltung und rüstet die Offensivwaffe in Slot 16 aus. Bei einem Einhänder kann der Schild angelegt bleiben. **WSF Defense** versucht Verteidigungshaltung und legt Defensivwaffe und Schild in Slot 16 und 17 an. Blockiert ein laufender Cooldown den Wechsel, drücke die Taste nach Ablauf erneut. Mit `/wsf shield` kannst du auch nur einen neuen Schild übernehmen.
+**WSF Offense** attempts Battle Stance and equips the offensive weapon in slot 16. A shield may remain equipped if the offensive weapon is one-handed. **WSF Defense** attempts Defensive Stance and equips the defensive weapon and shield in slots 16 and 17. If a cooldown blocks the swap, press the macro again when it ends. Run `/wsf shield` to save just a new shield.
 
-## Makros verwalten
+## Macro management
 
-- Erfasse Ausrüstung außerhalb des Kampfes. `/wsf status` zeigt die gespeicherten Waffen deines Charakters und `/wsf sync` aktualisiert oder erstellt die Makros erneut.
-- Lass die Namen der erzeugten Makros stehen, damit das Addon sie beim nächsten Waffenwechsel wiederfindet. Es erkennt sie am Kommentar `# WeaponSwapForever` und ersetzt beim Aktualisieren den Makrotext. Ist derselbe Name schon durch ein eigenes Charaktermakro belegt, benenne dieses Makro um und führe `/wsf sync` aus.
-- Lass beide Waffen bei dir. Die Makros wählen per Gegenstands-ID und unterscheiden keine zwei Exemplare mit derselben ID.
+- Use `/wsf status` to see saved items and `/wsf sync` to update or recreate your macros out of combat.
+- Keep the managed macro names and the `# WeaponSwapForever` marker so the addon can find and update those macros. If a macro of your own uses the same name, rename it and run `/wsf sync`.
+- Carry the items you want to swap between. The macros identify items by item ID, so two copies with the same ID are treated as the same item.
 
-## Weitere Möglichkeiten
+## Languages
 
-- Mit getrennten Waffenwechsel- und Fähigkeitstasten kannst du den Wechsel vorziehen und siehst leichter, wann du die Fähigkeit auslösen kannst.
-- Für den Krieger kommen auch der Blizzard-Ausrüstungsmanager und `/equipset` infrage, sofern der Ausrüstungsmanager im Client verfügbar ist. Speichere dafür Sets mit den Waffenslots und ignoriere die übrige Ausrüstung.
+English is the default. German clients use the German menu and messages. Macro spell names come from WoW in the client language, while the managed macro names stay the same across languages. Addon text lives in [`Localization.lua`](WeaponSwapForever/Localization.lua).

@@ -1,29 +1,33 @@
+local _, addon = ...
+local VALUES = addon.VALUES
+
 local MAIN_HAND = 16
 local OFF_HAND = 17
 local MARKER = "# WeaponSwapForever"
 local QUESTION_MARK = 134400
 local menu, openMenu, refreshMenu
+local database
 
 local profiles = {
     ROGUE = {
-        hint = "/wsf main (Hauptwaffe), /wsf dagger (Dolch)",
+        hint = VALUES.ROGUE_SETUP,
         roles = {
-            { key = "main", label = "Hauptwaffe", slot = MAIN_HAND },
-            { key = "dagger", label = "Dolch", slot = MAIN_HAND, dagger = true },
+            { key = "main", label = VALUES.MAIN_HAND, slot = MAIN_HAND },
+            { key = "dagger", label = VALUES.DAGGER, slot = MAIN_HAND, dagger = true },
         },
         macros = {
-            { name = "WSF Finster", spell = 1752, before = 14251, main = "main" },
-            { name = "WSF Hinterhalt", spell = 8676, main = "dagger" },
-            { name = "WSF Meucheln", spell = 53, main = "dagger" },
-            { name = "WSF Hauptwaffe", main = "main" },
+            { name = "WSF Sinister", legacyName = "WSF Finster", spell = 1752, before = 14251, main = "main" },
+            { name = "WSF Ambush", legacyName = "WSF Hinterhalt", spell = 8676, main = "dagger" },
+            { name = "WSF Backstab", legacyName = "WSF Meucheln", spell = 53, main = "dagger" },
+            { name = "WSF Main Hand", legacyName = "WSF Hauptwaffe", label = VALUES.MAIN_HAND, main = "main" },
         },
     },
     WARRIOR = {
-        hint = "/wsf offense (Offensivwaffe), /wsf defense (Einhandwaffe und Schild)",
+        hint = VALUES.WARRIOR_SETUP,
         roles = {
-            { key = "offense", label = "Offensivwaffe", slot = MAIN_HAND },
-            { key = "defense", label = "Defensivwaffe", slot = MAIN_HAND },
-            { key = "shield", label = "Schild", slot = OFF_HAND, shield = true },
+            { key = "offense", label = VALUES.OFFENSIVE_WEAPON, slot = MAIN_HAND },
+            { key = "defense", label = VALUES.DEFENSIVE_WEAPON, slot = MAIN_HAND },
+            { key = "shield", label = VALUES.SHIELD, slot = OFF_HAND, shield = true },
         },
         macros = {
             { name = "WSF Offense", spell = 2457, main = "offense", stance = true },
@@ -33,15 +37,26 @@ local profiles = {
 }
 
 local function say(message)
-    print("|cffffd100Weapon Swap Forever|r " .. message)
+    print("|cffffd100" .. VALUES.ADDON_NAME .. "|r " .. message)
 end
 
 local function getDatabase()
+    if database then
+        return database
+    end
     WeaponSwapForeverDB = WeaponSwapForeverDB or { weapons = {}, links = {} }
     local db = WeaponSwapForeverDB
     db.assigned = db.assigned or {}
+    for _, spec in ipairs(profiles.ROGUE.macros) do
+        local legacy = db.assigned[spec.legacyName]
+        if legacy then
+            db.assigned[spec.name] = db.assigned[spec.name] or legacy
+            db.assigned[spec.legacyName] = nil
+        end
+    end
     db.custom = db.custom or {}
-    return db
+    database = db
+    return database
 end
 
 local function macroSpecs(profile, db)
@@ -70,7 +85,7 @@ local function buildMacro(spec, db)
     local spell = spec.spell and C_Spell.GetSpellName(spec.spell)
     local before = spec.before and C_Spell.GetSpellName(spec.before)
     if spec.spell and not spell then
-        return nil, "Fähigkeit für " .. spec.name .. " konnte nicht geladen werden."
+        return nil, VALUES.SPELL_NOT_AVAILABLE:format(spec.name)
     end
 
     local tooltip = spell or ("item:%d"):format(main)
@@ -107,36 +122,45 @@ local function findCharacterMacro(name)
     return found, body
 end
 
-local function writeMacro(name, body)
-    local index, currentBody, conflict = findCharacterMacro(name)
-    if conflict then
-        return false, name .. " ist bereits belegt. Benenne das vorhandene Charaktermakro um."
+local function findManagedMacro(spec)
+    local index, body, conflict = findCharacterMacro(spec.name)
+    if not index and not conflict and spec.legacyName then
+        local legacyIndex, legacyBody = findCharacterMacro(spec.legacyName)
+        return legacyIndex, legacyBody, false, legacyIndex ~= nil
     end
-    if currentBody == body then
+    return index, body, conflict, false
+end
+
+local function writeMacro(spec, body)
+    local name = spec.name
+    local index, currentBody, conflict, legacy = findManagedMacro(spec)
+    if conflict then
+        return false, VALUES.MACRO_CONFLICT:format(name)
+    end
+    if not legacy and currentBody == body then
         return true
     end
     if #body > 255 then
-        return false, name .. " überschreitet das Makrolimit."
+        return false, VALUES.MACRO_LIMIT:format(name)
     end
 
-    local ok, writtenIndex
+    local ok
     if index then
-        ok, writtenIndex = pcall(EditMacro, index, nil, nil, body)
-        writtenIndex = writtenIndex or index
+        ok = pcall(EditMacro, index, legacy and name or nil, nil, body)
     else
         local _, count = GetNumMacros()
         if count >= Constants.MacroConsts.MAX_CHARACTER_MACROS then
-            return false, "Kein freier Platz für " .. name .. "."
+            return false, VALUES.NO_MACRO_SLOT:format(name)
         end
-        ok, writtenIndex = pcall(CreateMacro, name, QUESTION_MARK, body, true)
+        ok = pcall(CreateMacro, name, QUESTION_MARK, body, true)
     end
-    if ok and type(writtenIndex) == "number" then
-        local actualName, _, actualBody = GetMacroInfo(writtenIndex)
-        if actualName == name and actualBody == body then
+    if ok then
+        local _, actualBody = findCharacterMacro(name)
+        if actualBody == body then
             return true
         end
     end
-    return false, name .. " konnte nicht gespeichert werden."
+    return false, VALUES.MACRO_SAVE_FAILED:format(name)
 end
 
 local function sync(profile, db)
@@ -146,7 +170,7 @@ local function sync(profile, db)
         local body, message = buildMacro(spec, db)
         if body then
             local ok
-            ok, message = writeMacro(spec.name, body)
+            ok, message = writeMacro(spec, body)
             if ok then
                 ready = ready + 1
             end
@@ -156,9 +180,9 @@ local function sync(profile, db)
             failed = failed + 1
         end
     end
-    say(("%d/%d Makros aktuell."):format(ready, #specs))
+    say(VALUES.MACROS_CURRENT:format(ready, #specs))
     if failed > 0 then
-        say("Nach der Korrektur /wsf sync ausführen.")
+        say(VALUES.RETRY_SYNC)
     elseif ready < #specs then
         say(profile.hint)
     end
@@ -176,20 +200,20 @@ local function readEquipped(role, sourceSlot)
     local slot = sourceSlot or role.slot
     local itemID = GetInventoryItemID("player", slot)
     if not itemID then
-        return nil, ("Für %s zuerst einen Gegenstand in Slot %d anlegen."):format(role.label, slot)
+        return nil, VALUES.EQUIP_ITEM_FIRST:format(role.label, slot)
     end
 
     local location, class, subclass = getEquipmentType(itemID)
     if role.shield then
         if location ~= "INVTYPE_SHIELD" then
-            return nil, "Lege einen Schild in der Nebenhand an."
+            return nil, VALUES.EQUIP_SHIELD
         end
     elseif class ~= Enum.ItemClass.Weapon then
-        return nil, "Lege eine Waffe in der Haupthand an."
+        return nil, VALUES.EQUIP_MAIN_HAND
     elseif role.dagger and subclass ~= Enum.ItemWeaponSubclass.Dagger then
-        return nil, "Lege einen Dolch in der Haupthand an."
+        return nil, VALUES.EQUIP_DAGGER
     elseif role.dagger and location == "INVTYPE_WEAPONOFFHAND" then
-        return nil, "Dieser Dolch passt nur in die Nebenhand."
+        return nil, VALUES.OFF_HAND_ONLY_DAGGER
     end
 
     return { id = itemID, link = GetInventoryItemLink("player", slot) }
@@ -210,7 +234,7 @@ local function capture(profile, command, db, sourceSlot)
     for key, item in pairs(selection) do
         db.weapons[key], db.links[key] = item.id, item.link
     end
-    say("Ausrüstung gespeichert.")
+    say(VALUES.EQUIPMENT_SAVED)
     sync(profile, db)
 end
 
@@ -243,22 +267,22 @@ end
 
 local function acceptEquipment(proposal, role)
     if InCombatLockdown() then
-        say("Bestätige die Auswahl nach dem Kampf.")
+        say(VALUES.COMBAT_CONFIRM)
         return true
     end
     if GetInventoryItemID("player", proposal.slot) ~= proposal.id
         or (role == "defense" and GetInventoryItemID("player", OFF_HAND) ~= proposal.shield) then
-        say("Deine Ausrüstung hat sich inzwischen geändert.")
+        say(VALUES.EQUIPMENT_CHANGED)
         return
     end
     capture(proposal.profile, role, getDatabase(), proposal.slot)
 end
 
 StaticPopupDialogs[EQUIPMENT_PROMPT] = {
-    text = "%s wurde angelegt. Als %s für deine Waffenwechsel-Makros übernehmen?",
-    button1 = "Übernehmen",
-    button2 = CANCEL,
-    button3 = "Menü",
+    text = VALUES.EQUIPMENT_PROMPT,
+    button1 = VALUES.USE_EQUIPMENT,
+    button2 = VALUES.CANCEL,
+    button3 = VALUES.MENU,
     timeout = 0,
     hideOnEscape = true,
     OnHide = clearPrompt,
@@ -271,11 +295,11 @@ StaticPopupDialogs[EQUIPMENT_PROMPT] = {
 }
 
 StaticPopupDialogs[WARRIOR_PROMPT] = {
-    text = "%s wurde angelegt. Für welches Makro möchtest du die Waffe übernehmen? Für Defense wird auch %s übernommen.",
-    button1 = "Offense",
-    button2 = CANCEL,
-    button3 = "Defense",
-    button4 = "Menü",
+    text = VALUES.WARRIOR_EQUIPMENT_PROMPT,
+    button1 = VALUES.OFFENSE,
+    button2 = VALUES.CANCEL,
+    button3 = VALUES.DEFENSE,
+    button4 = VALUES.MENU,
     timeout = 0,
     hideOnEscape = true,
     OnHide = clearPrompt,
@@ -314,16 +338,16 @@ local function showEquipmentPrompt(profile, warrior, main, off, mainChanged, off
     local shield = warrior and off and getEquipmentType(off) == "INVTYPE_SHIELD"
     if itemClass == Enum.ItemClass.Weapon and subclass ~= Enum.ItemWeaponSubclass.Fishingpole then
         local proposal = { profile = profile, slot = MAIN_HAND, id = main }
-        local name = GetInventoryItemLink("player", MAIN_HAND) or ("Gegenstand %d"):format(main)
+        local name = GetInventoryItemLink("player", MAIN_HAND) or VALUES.ITEM_NUMBER:format(main)
         if shield and location ~= "INVTYPE_2HWEAPON" then
-            local shieldName = GetInventoryItemLink("player", OFF_HAND) or ("Schild %d"):format(off)
+            local shieldName = GetInventoryItemLink("player", OFF_HAND) or VALUES.SHIELD_NUMBER:format(off)
             proposal.shield = off
             presentPrompt(proposal, WARRIOR_PROMPT, name, shieldName)
             return
         end
         local dagger = subclass == Enum.ItemWeaponSubclass.Dagger
         proposal.role = warrior and "offense" or (dagger and "dagger" or "main")
-        local label = warrior and "Offensivwaffe" or (dagger and "Dolch" or "Hauptwaffe")
+        local label = warrior and VALUES.OFFENSIVE_WEAPON or (dagger and VALUES.DAGGER or VALUES.MAIN_HAND)
         presentPrompt(proposal, EQUIPMENT_PROMPT, name, label)
         return
     end
@@ -334,17 +358,17 @@ local function showEquipmentPrompt(profile, warrior, main, off, mainChanged, off
     local role, label
     if warrior then
         if shield and off ~= db.weapons.shield then
-            role, label = "shield", "Schild"
+            role, label = "shield", VALUES.SHIELD
         end
     elseif not isKnownWeapon(db, off) then
         local offLocation, offClass, offSubclass = getEquipmentType(off)
         if offClass == Enum.ItemClass.Weapon and offSubclass == Enum.ItemWeaponSubclass.Dagger
             and offLocation == "INVTYPE_WEAPON" then
-            role, label = "dagger", "Dolch für die Haupthand"
+            role, label = "dagger", VALUES.DAGGER_FOR_MAIN_HAND
         end
     end
     if role then
-        local name = GetInventoryItemLink("player", OFF_HAND) or ("Gegenstand %d"):format(off)
+        local name = GetInventoryItemLink("player", OFF_HAND) or VALUES.ITEM_NUMBER:format(off)
         presentPrompt({ profile = profile, slot = OFF_HAND, id = off, role = role }, EQUIPMENT_PROMPT, name, label)
     end
 end
@@ -407,7 +431,7 @@ SlashCmdList.WEAPONSWAPFOREVER = function(input)
     local _, class = UnitClass("player")
     local profile = profiles[class]
     if not profile then
-        say("Verfügbar für Schurken und Krieger.")
+        say(VALUES.CLASS_SUPPORT)
         return
     end
 
@@ -416,7 +440,7 @@ SlashCmdList.WEAPONSWAPFOREVER = function(input)
     if command == "status" then
         for _, role in ipairs(profile.roles) do
             local id = db.weapons[role.key]
-            local item = db.links[role.key] or (id and ("item:%d"):format(id)) or "noch nicht gewählt"
+            local item = db.links[role.key] or (id and ("item:%d"):format(id)) or VALUES.NOT_SELECTED
             say(role.label .. " – " .. item)
         end
         return
@@ -430,7 +454,7 @@ SlashCmdList.WEAPONSWAPFOREVER = function(input)
 
     if command == "sync" then
         if InCombatLockdown() then
-            say("Makros lassen sich außerhalb des Kampfes aktualisieren.")
+            say(VALUES.COMBAT_SYNC)
             return
         end
         sync(profile, db)
@@ -440,7 +464,7 @@ SlashCmdList.WEAPONSWAPFOREVER = function(input)
     for _, role in ipairs(profile.roles) do
         if command == role.key then
             if InCombatLockdown() then
-                say("Speichere deine Ausrüstung außerhalb des Kampfes.")
+                say(VALUES.COMBAT_CAPTURE)
                 return
             end
             closePrompt()
@@ -450,11 +474,11 @@ SlashCmdList.WEAPONSWAPFOREVER = function(input)
     end
     say(profile.hint)
     if class == "ROGUE" then
-        say("WSF Hauptwaffe wechselt zur normalen Hauptwaffe.")
+        say(VALUES.HELP_ROGUE)
     else
-        say("/wsf shield übernimmt nur den Schild.")
+        say(VALUES.HELP_WARRIOR)
     end
-    say("/wsf status zeigt deine Auswahl. /wsf sync aktualisiert die Makros.")
+    say(VALUES.HELP_COMMON)
 end
 
 local function createButton(parent, label, width, onClick)
@@ -467,18 +491,18 @@ end
 
 local function assignWeapon(profile, spec)
     if InCombatLockdown() then
-        say("Ändere diese Zuweisung außerhalb des Kampfes.")
+        say(VALUES.ASSIGNMENT_OUT_OF_COMBAT)
         return
     end
     local item, message = readEquipped({
-        slot = MAIN_HAND, label = "diese Fähigkeit", dagger = spec.main == "dagger",
+        slot = MAIN_HAND, label = VALUES.THIS_ABILITY, dagger = spec.main == "dagger",
     })
     if not item then
         say(message)
         return
     end
     if spec.off and getEquipmentType(item.id) == "INVTYPE_2HWEAPON" then
-        say("Wähle für dieses Makro eine Einhandwaffe, damit du den Schild anlegen kannst.")
+        say(VALUES.EQUIP_ONE_HAND)
         return
     end
     local db = getDatabase()
@@ -496,7 +520,7 @@ local function createRow(parent, profile, spec, index)
     skill:SetWidth(270)
     skill:SetJustifyH("LEFT")
     skill:SetWordWrap(false)
-    skill:SetText((spec.spell and C_Spell.GetSpellName(spec.spell)) or spec.name)
+    skill:SetText((spec.spell and C_Spell.GetSpellName(spec.spell)) or spec.label or spec.name)
 
     row.weapon = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     row.weapon:SetPoint("TOPLEFT", skill, "BOTTOMLEFT", 0, -4)
@@ -504,14 +528,14 @@ local function createRow(parent, profile, spec, index)
     row.weapon:SetJustifyH("LEFT")
     row.weapon:SetWordWrap(false)
 
-    local assign = createButton(row, "Waffe setzen", 100, function()
+    local assign = createButton(row, VALUES.SET_WEAPON, 100, function()
         assignWeapon(profile, spec)
     end)
     assign:SetPoint("LEFT", 275, 0)
 
-    row.reset = createButton(row, "Standard", 75, function()
+    row.reset = createButton(row, VALUES.DEFAULT, 75, function()
         if InCombatLockdown() then
-            say("Ändere diese Zuweisung außerhalb des Kampfes.")
+            say(VALUES.ASSIGNMENT_OUT_OF_COMBAT)
             return
         end
         local db = getDatabase()
@@ -520,12 +544,12 @@ local function createRow(parent, profile, spec, index)
     end)
     row.reset:SetPoint("LEFT", assign, "RIGHT", 4, 0)
 
-    row.pickup = createButton(row, "Makro", 75, function()
+    row.pickup = createButton(row, VALUES.MACRO, 75, function()
         if InCombatLockdown() then
-            say("Platziere das Makro außerhalb des Kampfes.")
+            say(VALUES.COMBAT_PLACE_MACRO)
             return
         end
-        local macroIndex = findCharacterMacro(spec.name)
+        local macroIndex = findManagedMacro(spec)
         if macroIndex then
             PickupMacro(macroIndex)
         end
@@ -536,21 +560,21 @@ end
 
 local function addAbility(profile, input)
     if InCombatLockdown() then
-        say("Füge Fähigkeiten außerhalb des Kampfes hinzu.")
+        say(VALUES.COMBAT_ADD_ABILITY)
         return
     end
     local identifier = input:GetText():match("^%s*(.-)%s*$")
     local spell = identifier ~= "" and C_Spell.GetSpellInfo(tonumber(identifier) or identifier)
     if not spell or C_Spell.IsSpellPassive(spell.spellID)
         or not C_SpellBook.FindSpellBookSlotForSpell(spell.spellID) then
-        say("Gib den Namen oder die ID einer erlernten aktiven Fähigkeit ein.")
+        say(VALUES.SPELL_NOT_LEARNED)
         return
     end
     local db = getDatabase()
     for _, spec in ipairs(macroSpecs(profile, db)) do
         local name = spec.spell and C_Spell.GetSpellName(spec.spell)
         if name == spell.name then
-            say(spell.name .. " steht bereits im Menü. Nutze dort „Waffe setzen“.")
+            say(VALUES.ALREADY_IN_MENU:format(spell.name))
             return
         end
     end
@@ -565,11 +589,11 @@ local function addAbility(profile, input)
     local body, errorMessage = buildMacro(spec, db)
     local saved
     if body then
-        saved, errorMessage = writeMacro(spec.name, body)
+        saved, errorMessage = writeMacro(spec, body)
     end
     if not saved then
         db.assigned[spec.name] = nil
-        say(errorMessage or "Das Makro konnte nicht gespeichert werden.")
+        say(errorMessage or VALUES.MACRO_SAVE_FALLBACK)
         return
     end
     db.custom[#db.custom + 1] = spec
@@ -588,7 +612,7 @@ openMenu = function(profile)
         menu:SetMovable(true)
         menu:SetClampedToScreen(true)
         ButtonFrameTemplate_HidePortrait(menu)
-        menu.TitleContainer.TitleText:SetText("Weapon Swap Forever")
+        menu.TitleContainer.TitleText:SetText(VALUES.ADDON_NAME)
         tinsert(UISpecialFrames, menu:GetName())
 
         local dragHandle = CreateFrame("Frame", nil, menu.TitleContainer)
@@ -602,7 +626,7 @@ openMenu = function(profile)
 
         local instructions = menu:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         instructions:SetPoint("TOPLEFT", 16, -35)
-        instructions:SetText("Waffe in der Haupthand anlegen und zuweisen. Mit „Makro“ auf die Aktionsleiste ziehen.")
+        instructions:SetText(VALUES.MENU_INSTRUCTIONS)
 
         local scroll = CreateFrame("ScrollFrame", nil, menu, "UIPanelScrollFrameTemplate")
         scroll:SetPoint("TOPLEFT", 16, -55)
@@ -617,7 +641,7 @@ openMenu = function(profile)
 
         local label = menu:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         label:SetPoint("BOTTOMLEFT", 16, 20)
-        label:SetText("Fähigkeit oder Zauber-ID")
+        label:SetText(VALUES.SPELL_INPUT)
         local input = CreateFrame("EditBox", nil, menu, "InputBoxTemplate")
         input:SetSize(240, 22)
         input:SetPoint("LEFT", label, "RIGHT", 14, 0)
@@ -625,7 +649,7 @@ openMenu = function(profile)
         input:SetMaxLetters(100)
         input:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
         input:SetScript("OnEnterPressed", function(self) addAbility(profile, self) end)
-        local add = createButton(menu, "Hinzufügen", 100, function() addAbility(profile, input) end)
+        local add = createButton(menu, VALUES.ADD_ABILITY, 100, function() addAbility(profile, input) end)
         add:SetPoint("LEFT", input, "RIGHT", 8, 0)
 
         local rows = {}
@@ -642,11 +666,11 @@ openMenu = function(profile)
                 local default = db.weapons[spec.main]
                 local itemID = assigned and assigned.id or default
                 local link = assigned and assigned.link or (not assigned and db.links[spec.main])
-                local text = link or (itemID and ("Gegenstand %d"):format(itemID)) or "Keine Waffe gewählt"
-                row.weapon:SetText(text .. (default and not assigned and " (Standard)" or ""))
+                local text = link or (itemID and VALUES.ITEM_NUMBER:format(itemID)) or VALUES.NO_WEAPON
+                row.weapon:SetText(text .. (default and not assigned and VALUES.DEFAULT_SUFFIX or ""))
                 row.reset:SetEnabled(assigned ~= nil and default ~= nil and (not spec.off or db.weapons[spec.off] ~= nil))
                 row.reset:SetShown(spec.main ~= nil)
-                row.pickup:SetEnabled(findCharacterMacro(spec.name) ~= nil)
+                row.pickup:SetEnabled(findManagedMacro(spec) ~= nil)
             end
             local contentHeight = math.max(1, #specs * 44)
             content:SetHeight(contentHeight)
